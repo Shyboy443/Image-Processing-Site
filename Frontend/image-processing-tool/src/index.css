@@ -133,6 +133,34 @@ button {
   cursor: pointer;
   transition: background-color 0.3s, transform 0.2s;
 }
+.resetbtn{
+  background-color: #f80019ba;
+  color: #fff;
+  border: none;
+  padding: 4px 10px; /* Reduced padding */
+  border-radius: 5px;
+  font-size: 10px; /* Reduced font size */
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.2s;
+}
+.resetbtn::after {
+  content: "↻"; /* Optional: add an icon before the text */
+  margin-right: 4px;
+  margin-left: 4px;
+}
+.buttonUpload{
+  background-color: #2d24e2c1;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-size: 16px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: background-color 0.3s, transform 0.2s;
+  margin-top: 10px;
+}
 
 button:hover {
   background-color: #0056b3;
@@ -292,4 +320,26 @@ button:active {
   margin-top: 10px; /* Slightly reduced margin */
   padding: 3px 2px; /* Adjusted padding */
   font-size: 12px; /* Smaller font size */
+}
+/* New CSS for download button */
+.download-button {
+  background-color: #28a745; /* Green color for download button */
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-size: 16px;
+  cursor: pointer;
+  text-decoration: none; /* Remove underline from link */
+  display: inline-block;
+  transition: background-color 0.3s, transform 0.2s;
+  margin-top: 10px; /* Space between image and button */
+}
+
+.download-button:hover {
+  background-color: #218838; /* Darker green on hover */
+}
+
+.download-button:active {
+  transform: scale(0.98); /* Slightly shrink on click */
 }

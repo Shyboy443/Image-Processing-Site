@@ -218,7 +218,7 @@ function ImageUploader() {
               value={brightness}
               onChange={(e) => setBrightness(e.target.value)}
             />
-            <button onClick={resetBrightness}>Reset</button>
+            <button className="resetbtn" onClick={resetBrightness}></button>
           </div>
           <div>
             <label htmlFor="hue">Hue: {hue}</label>
@@ -231,7 +231,7 @@ function ImageUploader() {
               value={hue}
               onChange={(e) => setHue(e.target.value)}
             />
-            <button onClick={resetHue}>Reset</button>
+            <button className="resetbtn" onClick={resetHue}></button>
           </div>
           <div>
             <label htmlFor="saturation">Saturation: {saturation}</label>
@@ -244,7 +244,7 @@ function ImageUploader() {
               value={saturation}
               onChange={(e) => setSaturation(e.target.value)}
             />
-            <button onClick={resetSaturation}>Reset</button>
+            <button className="resetbtn" onClick={resetSaturation}></button>
           </div>
           <div>
             <label htmlFor="lightness">Lightness: {lightness}</label>
@@ -257,7 +257,7 @@ function ImageUploader() {
               value={lightness}
               onChange={(e) => setLightness(e.target.value)}
             />
-            <button onClick={resetLightness}>Reset</button>
+            <button className="resetbtn" onClick={resetLightness}></button>
           </div>
 
           <div>
@@ -271,7 +271,7 @@ function ImageUploader() {
               value={tonalRange}
               onChange={(e) => setTonalRange(e.target.value)}
             />
-            <button onClick={resetTonalRange}>Reset</button>
+            <button className="resetbtn" onClick={resetTonalRange}></button>
           </div>
           <div>
             <label htmlFor="gamma">Gamma: {gamma}</label>
@@ -284,7 +284,7 @@ function ImageUploader() {
               value={gamma}
               onChange={(e) => setGamma(e.target.value)}
             />
-            <button onClick={resetGamma}>Reset</button>
+            <button className="resetbtn" onClick={resetGamma}></button>
           </div>
           <button onClick={() => setShowRgbModal(true)}>RGB Change</button>
           {/* Modal for RGB Sliders */}
@@ -307,7 +307,7 @@ function ImageUploader() {
                     value={red}
                     onChange={(e) => setRed(e.target.value)}
                   />
-                  <button onClick={resetRed}>Reset</button>
+                  <button className="resetbtn" onClick={resetRed}></button>
                 </div>
                 <div>
                   <label htmlFor="green">Green: {green}</label>
@@ -320,7 +320,7 @@ function ImageUploader() {
                     value={green}
                     onChange={(e) => setGreen(e.target.value)}
                   />
-                  <button onClick={resetGreen}>Reset</button>
+                  <button className="resetbtn" onClick={resetGreen}></button>
                 </div>
                 <div>
                   <label htmlFor="blue">Blue: {blue}</label>
@@ -333,7 +333,7 @@ function ImageUploader() {
                     value={blue}
                     onChange={(e) => setBlue(e.target.value)}
                   />
-                  <button onClick={resetBlue}>Reset</button>
+                  <button className="resetbtn" onClick={resetBlue}></button>
                 </div>
                 <button onClick={() => setShowRgbModal(false)}>Close</button>
               </div>
@@ -410,7 +410,9 @@ function ImageUploader() {
         </div>
       </div>
 
-      <button onClick={handleUpload}>Upload</button>
+      <button className="buttonUpload" onClick={handleUpload}>
+        Process Image
+      </button>
       {message && <p>{message}</p>}
 
       <div className="image-container">
@@ -426,7 +428,12 @@ function ImageUploader() {
         <div className="image-section">
           <h2>Image After Processing:</h2>
           {processedImage ? (
-            <img src={processedImage} alt="Processed" className="image" />
+            <>
+              <img src={processedImage} alt="Processed" className="image" />
+              <a href={processedImage} download="processed-image.png">
+                <button className="download-button">Download Image</button>
+              </a>
+            </>
           ) : (
             <div className="placeholder">No Image Processed</div>
           )}
