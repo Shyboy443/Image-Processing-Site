@@ -3,6 +3,7 @@ from flask_cors import CORS
 from PIL import Image, ImageEnhance, ImageOps
 import io
 import base64
+import colorsys
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for cross-origin requests
@@ -66,12 +67,23 @@ def upload_image():
     return jsonify({"image": base64_image, "message": "Image processed successfully"}), 200
 
 def adjust_hue(image, hue_factor):
-    # Convert image to HSV
-    image = image.convert('HSV')
-    data = list(image.getdata())
-    data = [(int((pixel[0] + hue_factor * 255) % 255), pixel[1], pixel[2]) for pixel in data]
-    image.putdata(data)
-    return image.convert('RGB')
+    """Adjust the hue of the image."""
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+    
+    # Convert image to numpy array
+    pixels = image.load()
+    for i in range(image.width):
+        for j in range(image.height):
+            r, g, b = pixels[i, j]
+            # Convert RGB to HSV
+            h, s, v = colorsys.rgb_to_hsv(r / 255., g / 255., b / 255.)
+            # Adjust hue and convert back to RGB
+            h = (h + hue_factor / 360.0) % 1.0
+            r, g, b = colorsys.hsv_to_rgb(h, s, v)
+            # Update pixel value
+            pixels[i, j] = (int(r * 255), int(g * 255), int(b * 255))
+    return image
 
 def adjust_saturation(image, saturation_factor):
     enhancer = ImageEnhance.Color(image)
