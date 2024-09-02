@@ -15,6 +15,7 @@ function ImageUploader() {
   const [crop, setCrop] = useState(false);
   const [cropWidth, setCropWidth] = useState(0);
   const [cropHeight, setCropHeight] = useState(0);
+  const [strength, setStrength] = useState(1); // State for strength control
 
   useEffect(() => {
     if (originalImage) {
@@ -56,9 +57,26 @@ function ImageUploader() {
       canvas.width = image.width;
       canvas.height = image.height;
 
-      ctx.filter = `brightness(${brightness}) hue-rotate(${hue}deg) saturate(${saturation})`;
+      // Conditionally scale each transformation if it has been adjusted from its default value
+      const appliedBrightness =
+        brightness !== 1 ? brightness * strength : brightness;
+      const appliedHue = hue !== 0 ? hue * strength : hue;
+      const appliedSaturation =
+        saturation !== 1 ? saturation * strength : saturation;
+      const appliedLightness =
+        lightness !== 1 ? lightness * strength : lightness;
+
+      // Combine applied filters based on their current values
+      ctx.filter = `
+        brightness(${appliedBrightness}) 
+        hue-rotate(${appliedHue}deg) 
+        saturate(${appliedSaturation}) 
+        brightness(${appliedLightness})
+      `.trim(); // trim is used to clean up any unnecessary spaces
+
       ctx.drawImage(image, 0, 0);
 
+      // Handle flipping
       if (flip === "horizontal") {
         ctx.scale(-1, 1);
         ctx.drawImage(image, -image.width, 0);
@@ -67,6 +85,7 @@ function ImageUploader() {
         ctx.drawImage(image, 0, -image.height);
       }
 
+      // Handle cropping
       if (crop && cropWidth > 0 && cropHeight > 0) {
         const cropX = (canvas.width - cropWidth) / 2;
         const cropY = (canvas.height - cropHeight) / 2;
@@ -90,12 +109,21 @@ function ImageUploader() {
   const handleUpload = async () => {
     const formData = new FormData();
     formData.append("image", image);
-    formData.append("brightness", brightness);
+    formData.append(
+      "brightness",
+      brightness !== 1 ? brightness * strength : brightness
+    );
     formData.append("color_mode", colorMode);
     formData.append("flip", flip);
-    formData.append("hue", hue);
-    formData.append("saturation", saturation);
-    formData.append("lightness", lightness);
+    formData.append("hue", hue !== 0 ? hue * strength : hue);
+    formData.append(
+      "saturation",
+      saturation !== 1 ? saturation * strength : saturation
+    );
+    formData.append(
+      "lightness",
+      lightness !== 1 ? lightness * strength : lightness
+    );
     formData.append("crop", crop);
     formData.append("crop_width", cropWidth);
     formData.append("crop_height", cropHeight);
@@ -130,6 +158,18 @@ function ImageUploader() {
 
       <div className="controls-preview-container">
         <div className="left-controls">
+          <div>
+            <label htmlFor="strength">Strength:</label>
+            <select
+              id="strength"
+              value={strength}
+              onChange={(e) => setStrength(parseInt(e.target.value))}
+            >
+              <option value={1}>Low</option>
+              <option value={1.5}>Medium</option>
+              <option value={2}>High</option>
+            </select>
+          </div>
           <div>
             <label htmlFor="brightness">Brightness: {brightness}</label>
             <input
@@ -178,6 +218,7 @@ function ImageUploader() {
               onChange={(e) => setLightness(e.target.value)}
             />
           </div>
+
           <div>
             <label htmlFor="colorMode">Color Mode:</label>
             <select
