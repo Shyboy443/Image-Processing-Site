@@ -113,6 +113,13 @@ def adjust_tonal_range(image, min_tone, max_tone):
     if image.mode != 'RGB':
         image = image.convert('RGB')
 
+    min_tone = max(0.0, min_tone)
+    max_tone = min(255.0, max_tone)
+
+    if min_tone >= max_tone:
+        min_tone = 0.0
+        max_tone = 255.0
+
     # Convert image to numpy array
     pixels = image.load()
     for i in range(image.width):
@@ -122,6 +129,7 @@ def adjust_tonal_range(image, min_tone, max_tone):
             g = int((g - min_tone) / (max_tone - min_tone) * 255)
             b = int((b - min_tone) / (max_tone - min_tone) * 255)
             pixels[i, j] = (min(max(r, 0), 255), min(max(g, 0), 255), min(max(b, 0), 255))
+
     return image
 
 def adjust_gamma(image, gamma):

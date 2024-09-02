@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import Slider from "rc-slider";
+import "rc-slider/assets/index.css";
 
 function ImageUploader() {
   const [image, setImage] = useState(null);
@@ -31,6 +33,13 @@ function ImageUploader() {
   const resetRed = () => setRed(1);
   const resetGreen = () => setGreen(1);
   const resetBlue = () => setBlue(1);
+  const resetTone = () => {
+    setMinTone(0);
+    setMaxTone(255);
+  };
+
+  const [minTone, setMinTone] = useState(0);
+  const [maxTone, setMaxTone] = useState(255);
 
   useEffect(() => {
     if (originalImage) {
@@ -52,6 +61,8 @@ function ImageUploader() {
     red,
     green,
     blue,
+    minTone,
+    maxTone,
   ]);
 
   const handleFileChange = (e) => {
@@ -99,6 +110,13 @@ function ImageUploader() {
         data[i + 2] *= blue; // Adjust Blue channel
       }
 
+      // Apply tonal range adjustments
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = adjustTone(data[i]);
+        data[i + 1] = adjustTone(data[i + 1]);
+        data[i + 2] = adjustTone(data[i + 2]);
+      }
+
       const gammaCorrection = 1 / gamma;
       for (let i = 0; i < data.length; i += 4) {
         data[i] = 255 * Math.pow(data[i] / 255, gammaCorrection);
@@ -137,6 +155,12 @@ function ImageUploader() {
 
     image.src = originalImage;
   };
+  const adjustTone = (value) => {
+    return Math.min(
+      Math.max(((value - minTone) / (maxTone - minTone)) * 255, 0),
+      255
+    );
+  };
 
   const handleUpload = async () => {
     const formData = new FormData();
@@ -145,6 +169,8 @@ function ImageUploader() {
       "brightness",
       brightness !== 1 ? brightness * strength : brightness
     );
+    formData.append("min_tone", minTone);
+    formData.append("max_tone", maxTone);
     formData.append("color_mode", colorMode);
     formData.append("flip", flip);
     formData.append("hue", hue !== 0 ? hue * strength : hue);
@@ -156,20 +182,29 @@ function ImageUploader() {
       "lightness",
       lightness !== 1 ? lightness * strength : lightness
     );
-    formData.append("tonal_range", tonalRange);
-    formData.append("red", red);
-    formData.append("green", green);
-    formData.append("blue", blue);
-
+    formData.append("tonal_range", parseFloat(tonalRange));
+    formData.append("gamma", parseFloat(gamma));
+    formData.append("red", parseFloat(red));
+    formData.append("green", parseFloat(green));
+    formData.append("blue", parseFloat(blue));
     formData.append("crop", crop);
-    formData.append("crop_width", cropWidth);
-    formData.append("crop_height", cropHeight);
-
+    formData.append("crop_width", parseInt(cropWidth));
+    formData.append("crop_height", parseInt(cropHeight));
+    console.log("Sending data:", {
+      gamma: parseFloat(gamma),
+      tonal_range: parseFloat(tonalRange),
+    });
     try {
+      console.log("Sending data:", {
+        gamma: parseFloat(gamma),
+        tonal_range: parseFloat(tonalRange),
+      }); // Log to check if values are correct before sending
+
       const response = await fetch("http://localhost:5000/upload", {
         method: "POST",
         body: formData,
       });
+
       const data = await response.json();
       setMessage(data.message);
       setProcessedImage(`data:image/png;base64,${data.image}`);
@@ -259,20 +294,27 @@ function ImageUploader() {
             />
             <button className="resetbtn" onClick={resetLightness}></button>
           </div>
-
           <div>
-            <label htmlFor="tonalRange">Tonal Range: {tonalRange}</label>
-            <input
-              type="range"
-              id="tonalRange"
-              min="0.5"
-              max="2"
-              step="0.1"
-              value={tonalRange}
-              onChange={(e) => setTonalRange(e.target.value)}
+            <label>Min Tone - Max Tone</label>
+            <Slider
+              range
+              min={0}
+              max={255}
+              step={1}
+              value={[minTone, maxTone]}
+              onChange={(value) => {
+                setMinTone(value[0]);
+                setMaxTone(value[1]);
+              }}
+              allowCross={false}
             />
-            <button className="resetbtn" onClick={resetTonalRange}></button>
+            <div>
+              <span>Min Tone: {minTone}</span>
+              <span>Max Tone: {maxTone}</span>
+            </div>
+            <button className="resetbtn" onClick={resetTone}></button>
           </div>
+
           <div>
             <label htmlFor="gamma">Gamma: {gamma}</label>
             <input
