@@ -24,6 +24,12 @@ def upload_image():
     crop = request.form.get('crop', 'false') == 'true'
     crop_width = int(request.form.get('crop_width', 0))
     crop_height = int(request.form.get('crop_height', 0))
+    min_tone = float(request.form.get('min_tone', 0))
+    max_tone = float(request.form.get('max_tone', 255))
+    gamma = float(request.form.get('gamma', 1.0))
+    red = float(request.form.get('red', 1.0))
+    green = float(request.form.get('green', 1.0))
+    blue = float(request.form.get('blue', 1.0))
 
     # Adjust brightness
     enhancer = ImageEnhance.Brightness(image)
@@ -39,6 +45,15 @@ def upload_image():
     image = adjust_hue(image, hue)
     image = adjust_saturation(image, saturation)
     image = adjust_lightness(image, lightness)
+
+    # Apply RGB adjustments
+    image = adjust_rgb(image, red, green, blue)
+
+    # Apply tonal range adjustment
+    image = adjust_tonal_range(image, min_tone, max_tone)
+
+    # Apply gamma correction
+    image = adjust_gamma(image, gamma)
 
     # Apply cropping if specified
     if crop and crop_width > 0 and crop_height > 0:
@@ -92,6 +107,56 @@ def adjust_saturation(image, saturation_factor):
 def adjust_lightness(image, lightness_factor):
     enhancer = ImageEnhance.Brightness(image)
     return enhancer.enhance(lightness_factor)
+
+def adjust_tonal_range(image, min_tone, max_tone):
+    """Adjust the tonal range of the image."""
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+
+    # Convert image to numpy array
+    pixels = image.load()
+    for i in range(image.width):
+        for j in range(image.height):
+            r, g, b = pixels[i, j]
+            r = int((r - min_tone) / (max_tone - min_tone) * 255)
+            g = int((g - min_tone) / (max_tone - min_tone) * 255)
+            b = int((b - min_tone) / (max_tone - min_tone) * 255)
+            pixels[i, j] = (min(max(r, 0), 255), min(max(g, 0), 255), min(max(b, 0), 255))
+    return image
+
+def adjust_gamma(image, gamma):
+    """Adjust the gamma of the image."""
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+
+    # Create a lookup table for gamma correction
+    lookup_table = [int(255 * (i / 255) ** gamma) for i in range(256)]
+
+    def gamma_correct(pixel):
+        return tuple(lookup_table[color] for color in pixel)
+
+    # Apply gamma correction to each pixel
+    pixels = image.load()
+    for i in range(image.width):
+        for j in range(image.height):
+            pixels[i, j] = gamma_correct(pixels[i, j])
+    return image
+
+def adjust_rgb(image, red_factor, green_factor, blue_factor):
+    """Adjust the red, green, and blue channels of the image."""
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+
+    # Convert image to numpy array
+    pixels = image.load()
+    for i in range(image.width):
+        for j in range(image.height):
+            r, g, b = pixels[i, j]
+            r = int(r * red_factor)
+            g = int(g * green_factor)
+            b = int(b * blue_factor)
+            pixels[i, j] = (min(max(r, 0), 255), min(max(g, 0), 255), min(max(b, 0), 255))
+    return image
 
 if __name__ == "__main__":
     app.run(debug=True)

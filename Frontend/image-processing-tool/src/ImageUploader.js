@@ -16,6 +16,21 @@ function ImageUploader() {
   const [cropWidth, setCropWidth] = useState(0);
   const [cropHeight, setCropHeight] = useState(0);
   const [strength, setStrength] = useState(1); // State for strength control
+  const [tonalRange, setTonalRange] = useState(1);
+  const [gamma, setGamma] = useState(1);
+  const [red, setRed] = useState(1); // State for Red channel
+  const [green, setGreen] = useState(1); // State for Green channel
+  const [blue, setBlue] = useState(1); // State for Blue channel
+  const [showRgbModal, setShowRgbModal] = useState(false);
+  const resetBrightness = () => setBrightness(1);
+  const resetHue = () => setHue(0);
+  const resetSaturation = () => setSaturation(1);
+  const resetLightness = () => setLightness(1);
+  const resetTonalRange = () => setTonalRange(1);
+  const resetGamma = () => setGamma(1);
+  const resetRed = () => setRed(1);
+  const resetGreen = () => setGreen(1);
+  const resetBlue = () => setBlue(1);
 
   useEffect(() => {
     if (originalImage) {
@@ -32,6 +47,11 @@ function ImageUploader() {
     cropWidth,
     cropHeight,
     originalImage,
+    tonalRange,
+    gamma,
+    red,
+    green,
+    blue,
   ]);
 
   const handleFileChange = (e) => {
@@ -57,24 +77,36 @@ function ImageUploader() {
       canvas.width = image.width;
       canvas.height = image.height;
 
-      // Conditionally scale each transformation if it has been adjusted from its default value
-      const appliedBrightness =
-        brightness !== 1 ? brightness * strength : brightness;
-      const appliedHue = hue !== 0 ? hue * strength : hue;
-      const appliedSaturation =
-        saturation !== 1 ? saturation * strength : saturation;
-      const appliedLightness =
-        lightness !== 1 ? lightness * strength : lightness;
-
       // Combine applied filters based on their current values
       ctx.filter = `
-        brightness(${appliedBrightness}) 
-        hue-rotate(${appliedHue}deg) 
-        saturate(${appliedSaturation}) 
-        brightness(${appliedLightness})
-      `.trim(); // trim is used to clean up any unnecessary spaces
+            brightness(${brightness})
+            hue-rotate(${hue}deg)
+            saturate(${saturation})
+            brightness(${lightness})
+            contrast(${tonalRange})
+        `.trim();
 
       ctx.drawImage(image, 0, 0);
+
+      // Apply gamma correction
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      // Apply RGB adjustments
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] *= red; // Adjust Red channel
+        data[i + 1] *= green; // Adjust Green channel
+        data[i + 2] *= blue; // Adjust Blue channel
+      }
+
+      const gammaCorrection = 1 / gamma;
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = 255 * Math.pow(data[i] / 255, gammaCorrection);
+        data[i + 1] = 255 * Math.pow(data[i + 1] / 255, gammaCorrection);
+        data[i + 2] = 255 * Math.pow(data[i + 2] / 255, gammaCorrection);
+      }
+
+      ctx.putImageData(imageData, 0, 0);
 
       // Handle flipping
       if (flip === "horizontal") {
@@ -124,6 +156,11 @@ function ImageUploader() {
       "lightness",
       lightness !== 1 ? lightness * strength : lightness
     );
+    formData.append("tonal_range", tonalRange);
+    formData.append("red", red);
+    formData.append("green", green);
+    formData.append("blue", blue);
+
     formData.append("crop", crop);
     formData.append("crop_width", cropWidth);
     formData.append("crop_height", cropHeight);
@@ -163,7 +200,7 @@ function ImageUploader() {
             <select
               id="strength"
               value={strength}
-              onChange={(e) => setStrength(parseInt(e.target.value))}
+              onChange={(e) => setStrength(parseFloat(e.target.value))}
             >
               <option value={1}>Low</option>
               <option value={1.5}>Medium</option>
@@ -181,6 +218,7 @@ function ImageUploader() {
               value={brightness}
               onChange={(e) => setBrightness(e.target.value)}
             />
+            <button onClick={resetBrightness}>Reset</button>
           </div>
           <div>
             <label htmlFor="hue">Hue: {hue}</label>
@@ -193,6 +231,7 @@ function ImageUploader() {
               value={hue}
               onChange={(e) => setHue(e.target.value)}
             />
+            <button onClick={resetHue}>Reset</button>
           </div>
           <div>
             <label htmlFor="saturation">Saturation: {saturation}</label>
@@ -205,6 +244,7 @@ function ImageUploader() {
               value={saturation}
               onChange={(e) => setSaturation(e.target.value)}
             />
+            <button onClick={resetSaturation}>Reset</button>
           </div>
           <div>
             <label htmlFor="lightness">Lightness: {lightness}</label>
@@ -217,8 +257,88 @@ function ImageUploader() {
               value={lightness}
               onChange={(e) => setLightness(e.target.value)}
             />
+            <button onClick={resetLightness}>Reset</button>
           </div>
 
+          <div>
+            <label htmlFor="tonalRange">Tonal Range: {tonalRange}</label>
+            <input
+              type="range"
+              id="tonalRange"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={tonalRange}
+              onChange={(e) => setTonalRange(e.target.value)}
+            />
+            <button onClick={resetTonalRange}>Reset</button>
+          </div>
+          <div>
+            <label htmlFor="gamma">Gamma: {gamma}</label>
+            <input
+              type="range"
+              id="gamma"
+              min="0.5"
+              max="3"
+              step="0.1"
+              value={gamma}
+              onChange={(e) => setGamma(e.target.value)}
+            />
+            <button onClick={resetGamma}>Reset</button>
+          </div>
+          <button onClick={() => setShowRgbModal(true)}>RGB Change</button>
+          {/* Modal for RGB Sliders */}
+          {showRgbModal && (
+            <>
+              <div
+                className="modal-overlay"
+                onClick={() => setShowRgbModal(false)}
+              />
+              <div className="rgb-modal">
+                <h3>Adjust RGB Levels</h3>
+                <div>
+                  <label htmlFor="red">Red: {red}</label>
+                  <input
+                    type="range"
+                    id="red"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={red}
+                    onChange={(e) => setRed(e.target.value)}
+                  />
+                  <button onClick={resetRed}>Reset</button>
+                </div>
+                <div>
+                  <label htmlFor="green">Green: {green}</label>
+                  <input
+                    type="range"
+                    id="green"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={green}
+                    onChange={(e) => setGreen(e.target.value)}
+                  />
+                  <button onClick={resetGreen}>Reset</button>
+                </div>
+                <div>
+                  <label htmlFor="blue">Blue: {blue}</label>
+                  <input
+                    type="range"
+                    id="blue"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={blue}
+                    onChange={(e) => setBlue(e.target.value)}
+                  />
+                  <button onClick={resetBlue}>Reset</button>
+                </div>
+                <button onClick={() => setShowRgbModal(false)}>Close</button>
+              </div>
+            </>
+          )}
           <div>
             <label htmlFor="colorMode">Color Mode:</label>
             <select
@@ -270,14 +390,15 @@ function ImageUploader() {
           </div>
           {crop && (
             <div>
-              <label htmlFor="cropWidth">Crop Width:</label>
+              <label htmlFor="cropWidth">Width: </label>
               <input
                 type="number"
                 id="cropWidth"
                 value={cropWidth}
                 onChange={(e) => setCropWidth(e.target.value)}
               />
-              <label htmlFor="cropHeight">Crop Height:</label>
+              <br></br>
+              <label htmlFor="cropHeight">Height:</label>
               <input
                 type="number"
                 id="cropHeight"

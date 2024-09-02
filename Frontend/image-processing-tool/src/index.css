@@ -71,26 +71,26 @@ code {
 input[type="range"] {
   -webkit-appearance: none;
   width: 100%;
-  height: 8px;
+  height: 6px; /* Reduced height */
   background: #ddd;
   border-radius: 5px;
   cursor: pointer;
-  margin: 10px 0;
+  margin: 8px 0; /* Reduced margin */
 }
 
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 16px; /* Reduced width */
+  height: 16px; /* Reduced height */
   background: #007bff;
   border-radius: 50%;
   cursor: pointer;
 }
 
 input[type="range"]::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
+  width: 16px; /* Reduced width */
+  height: 16px; /* Reduced height */
   background: #007bff;
   border-radius: 50%;
   cursor: pointer;
@@ -114,7 +114,7 @@ input[type="number"] {
   padding: 10px;
   border: 1px solid #ccc;
   border-radius: 5px;
-  font-size: 16px;
+  font-size: 10px;
   width: 100px;
   transition: border-color 0.3s;
 }
@@ -123,14 +123,13 @@ input[type="number"]:focus {
   border-color: #007bff;
   outline: none;
 }
-
 button {
   background-color: #007bff;
   color: #fff;
   border: none;
-  padding: 10px 20px;
+  padding: 4px 10px; /* Reduced padding */
   border-radius: 5px;
-  font-size: 16px;
+  font-size: 10px; /* Reduced font size */
   cursor: pointer;
   transition: background-color 0.3s, transform 0.2s;
 }
@@ -142,6 +141,7 @@ button:hover {
 button:active {
   transform: scale(0.98);
 }
+
 
 .live-view-container {
   border: 2px solid #ddd;
@@ -239,4 +239,57 @@ button:active {
 .placeholder {
   color: #888;
   text-align: center;
+}
+
+/* ImageUploader.css */
+
+/* Adjusted modal overlay to cover the entire viewport */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.3); /* Slightly darker for better focus */
+  z-index: 999;
+}
+
+/* Smaller RGB modal */
+.rgb-modal {
+  position: fixed;
+  top: 50%;
+  left: 15%;
+  transform: translate(-50%, -50%);
+  background-color: white;
+  padding: 10px; /* Reduced padding */
+  border-radius: 5px; /* Slightly smaller border-radius */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); /* Less shadow for a more compact look */
+  z-index: 1000;
+  width: 200px; /* Reduced width */
+}
+
+/* Adjust heading inside the modal */
+.rgb-modal h3 {
+  margin-bottom: 5px; /* Reduced margin */
+  font-size: 12px; /* Smaller font size */
+}
+
+/* Adjust margins and font size for controls inside modal */
+.rgb-modal div {
+  margin-bottom: 2px; /* Reduced margin */
+}
+
+.rgb-modal label {
+  font-size: 14px; /* Smaller font size for labels */
+}
+
+.rgb-modal input[type="range"] {
+  width: 100%; /* Full width for range inputs */
+  height: 3px; /* Reduced height */
+}
+
+.rgb-modal button {
+  margin-top: 10px; /* Slightly reduced margin */
+  padding: 3px 2px; /* Adjusted padding */
+  font-size: 12px; /* Smaller font size */
 }
