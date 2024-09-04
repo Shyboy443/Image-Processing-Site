@@ -30,6 +30,7 @@ def upload_image():
     red = float(request.form.get('red', 1.0))
     green = float(request.form.get('green', 1.0))
     blue = float(request.form.get('blue', 1.0))
+    rotation_angle = float(request.form.get('rotation', 0))
 
     # Adjust brightness
     enhancer = ImageEnhance.Brightness(image)
@@ -45,6 +46,9 @@ def upload_image():
     image = adjust_hue(image, hue)
     image = adjust_saturation(image, saturation)
     image = adjust_lightness(image, lightness)
+    
+    if rotation_angle:
+        image = image.rotate(360.0-rotation_angle, expand=True)
 
     # Apply RGB adjustments
     image = adjust_rgb(image, red, green, blue)
@@ -81,22 +85,38 @@ def upload_image():
     # Return the base64-encoded image
     return jsonify({"image": base64_image, "message": "Image processed successfully"}), 200
 
+@app.route('/upload-cropped-image', methods=['POST'])
+def upload_cropped_image():
+    # Get the cropped image from the request
+    cropped_file = request.files['croppedImage']
+    cropped_image = Image.open(cropped_file.stream)
+
+    # Further processing can be done on the cropped_image if needed
+    # ...
+
+    # Save processed image to a byte buffer
+    byte_io = io.BytesIO()
+    cropped_image.save(byte_io, 'PNG')
+    byte_io.seek(0)
+
+    # Encode the image in base64 to send it back to the frontend
+    base64_image = base64.b64encode(byte_io.getvalue()).decode('utf-8')
+
+    # Return the base64-encoded cropped image
+    return jsonify({"image": base64_image, "message": "Cropped image processed successfully"}), 200
+
 def adjust_hue(image, hue_factor):
     """Adjust the hue of the image."""
     if image.mode != 'RGB':
         image = image.convert('RGB')
     
-    # Convert image to numpy array
     pixels = image.load()
     for i in range(image.width):
         for j in range(image.height):
             r, g, b = pixels[i, j]
-            # Convert RGB to HSV
             h, s, v = colorsys.rgb_to_hsv(r / 255., g / 255., b / 255.)
-            # Adjust hue and convert back to RGB
             h = (h + hue_factor / 360.0) % 1.0
             r, g, b = colorsys.hsv_to_rgb(h, s, v)
-            # Update pixel value
             pixels[i, j] = (int(r * 255), int(g * 255), int(b * 255))
     return image
 
@@ -120,7 +140,6 @@ def adjust_tonal_range(image, min_tone, max_tone):
         min_tone = 0.0
         max_tone = 255.0
 
-    # Convert image to numpy array
     pixels = image.load()
     for i in range(image.width):
         for j in range(image.height):
@@ -137,13 +156,11 @@ def adjust_gamma(image, gamma):
     if image.mode != 'RGB':
         image = image.convert('RGB')
 
-    # Create a lookup table for gamma correction
     lookup_table = [int(255 * (i / 255) ** gamma) for i in range(256)]
 
     def gamma_correct(pixel):
         return tuple(lookup_table[color] for color in pixel)
 
-    # Apply gamma correction to each pixel
     pixels = image.load()
     for i in range(image.width):
         for j in range(image.height):
@@ -155,7 +172,6 @@ def adjust_rgb(image, red_factor, green_factor, blue_factor):
     if image.mode != 'RGB':
         image = image.convert('RGB')
 
-    # Convert image to numpy array
     pixels = image.load()
     for i in range(image.width):
         for j in range(image.height):

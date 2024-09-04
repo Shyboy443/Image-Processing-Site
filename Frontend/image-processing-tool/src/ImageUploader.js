@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Slider from "rc-slider";
 import "rc-slider/assets/index.css";
+import Cropper from "react-cropper";
+import "cropperjs/dist/cropper.css";
 
 function ImageUploader() {
   const [image, setImage] = useState(null);
@@ -24,11 +26,17 @@ function ImageUploader() {
   const [green, setGreen] = useState(1); // State for Green channel
   const [blue, setBlue] = useState(1); // State for Blue channel
   const [showRgbModal, setShowRgbModal] = useState(false);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [cropper, setCropper] = useState(null);
+  const cropperRef = useRef(null);
+  const [croppedImage, setCroppedImage] = useState(null);
+  const [rotation, setRotation] = useState(0);
+
   const resetBrightness = () => setBrightness(1);
   const resetHue = () => setHue(0);
   const resetSaturation = () => setSaturation(1);
   const resetLightness = () => setLightness(1);
-  const resetTonalRange = () => setTonalRange(1);
+
   const resetGamma = () => setGamma(1);
   const resetRed = () => setRed(1);
   const resetGreen = () => setGreen(1);
@@ -76,6 +84,10 @@ function ImageUploader() {
     };
     reader.readAsDataURL(file);
   };
+  const handleRotationChange = (value) => {
+    setRotation(value);
+    // Apply rotation in live preview (Optional: Implement a quick rotation preview function)
+  };
 
   const updateLiveView = () => {
     if (!originalImage) return;
@@ -90,12 +102,12 @@ function ImageUploader() {
 
       // Combine applied filters based on their current values
       ctx.filter = `
-            brightness(${brightness})
-            hue-rotate(${hue}deg)
-            saturate(${saturation})
-            brightness(${lightness})
-            contrast(${tonalRange})
-        `.trim();
+        brightness(${brightness})
+        hue-rotate(${hue}deg)
+        saturate(${saturation})
+        brightness(${lightness})
+        contrast(${tonalRange})
+      `.trim();
 
       ctx.drawImage(image, 0, 0);
 
@@ -117,6 +129,7 @@ function ImageUploader() {
         data[i + 2] = adjustTone(data[i + 2]);
       }
 
+      // Apply gamma correction
       const gammaCorrection = 1 / gamma;
       for (let i = 0; i < data.length; i += 4) {
         data[i] = 255 * Math.pow(data[i] / 255, gammaCorrection);
@@ -126,16 +139,7 @@ function ImageUploader() {
 
       ctx.putImageData(imageData, 0, 0);
 
-      // Handle flipping
-      if (flip === "horizontal") {
-        ctx.scale(-1, 1);
-        ctx.drawImage(image, -image.width, 0);
-      } else if (flip === "vertical") {
-        ctx.scale(1, -1);
-        ctx.drawImage(image, 0, -image.height);
-      }
-
-      // Handle cropping
+      // Handle cropping after all filters are applied
       if (crop && cropWidth > 0 && cropHeight > 0) {
         const cropX = (canvas.width - cropWidth) / 2;
         const cropY = (canvas.height - cropHeight) / 2;
@@ -150,11 +154,37 @@ function ImageUploader() {
         ctx.putImageData(croppedImage, 0, 0);
       }
 
+      // Handle flipping
+      if (flip === "horizontal") {
+        const flippedCanvas = document.createElement("canvas");
+        const flippedCtx = flippedCanvas.getContext("2d");
+        flippedCanvas.width = canvas.width;
+        flippedCanvas.height = canvas.height;
+        flippedCtx.translate(flippedCanvas.width, 0);
+        flippedCtx.scale(-1, 1);
+        flippedCtx.drawImage(canvas, 0, 0);
+        canvas.width = flippedCanvas.width;
+        canvas.height = flippedCanvas.height;
+        ctx.drawImage(flippedCanvas, 0, 0);
+      } else if (flip === "vertical") {
+        const flippedCanvas = document.createElement("canvas");
+        const flippedCtx = flippedCanvas.getContext("2d");
+        flippedCanvas.width = canvas.width;
+        flippedCanvas.height = canvas.height;
+        flippedCtx.translate(0, flippedCanvas.height);
+        flippedCtx.scale(1, -1);
+        flippedCtx.drawImage(canvas, 0, 0);
+        canvas.width = flippedCanvas.width;
+        canvas.height = flippedCanvas.height;
+        ctx.drawImage(flippedCanvas, 0, 0);
+      }
+
       setLiveViewImage(canvas.toDataURL());
     };
 
     image.src = originalImage;
   };
+
   const adjustTone = (value) => {
     return Math.min(
       Math.max(((value - minTone) / (maxTone - minTone)) * 255, 0),
@@ -163,8 +193,18 @@ function ImageUploader() {
   };
 
   const handleUpload = async () => {
+    let finalImage = image;
+
+    // If there's a crop operation, handle it
+    if (cropperRef.current && cropperRef.current.cropper) {
+      const croppedCanvas = cropperRef.current.cropper.getCroppedCanvas();
+      finalImage = await new Promise((resolve) =>
+        croppedCanvas.toBlob(resolve)
+      );
+    }
+
     const formData = new FormData();
-    formData.append("image", image);
+    formData.append("image", finalImage);
     formData.append(
       "brightness",
       brightness !== 1 ? brightness * strength : brightness
@@ -190,16 +230,13 @@ function ImageUploader() {
     formData.append("crop", crop);
     formData.append("crop_width", parseInt(cropWidth));
     formData.append("crop_height", parseInt(cropHeight));
+    formData.append("rotation", rotation);
     console.log("Sending data:", {
       gamma: parseFloat(gamma),
       tonal_range: parseFloat(tonalRange),
     });
-    try {
-      console.log("Sending data:", {
-        gamma: parseFloat(gamma),
-        tonal_range: parseFloat(tonalRange),
-      }); // Log to check if values are correct before sending
 
+    try {
       const response = await fetch("http://localhost:5000/upload", {
         method: "POST",
         body: formData,
@@ -210,6 +247,21 @@ function ImageUploader() {
       setProcessedImage(`data:image/png;base64,${data.image}`);
     } catch (error) {
       console.error("Error uploading image:", error);
+    }
+  };
+
+  const handleCrop = () => {
+    if (cropperRef.current && cropperRef.current.cropper) {
+      const croppedCanvas = cropperRef.current.cropper.getCroppedCanvas();
+      const croppedImageData = croppedCanvas.toDataURL();
+
+      // Update the live view with the cropped image
+      setLiveViewImage(croppedImageData);
+
+      // Optionally, update the cropped image state if needed
+      setCroppedImage(croppedImageData);
+
+      setShowCropModal(false);
     }
   };
 
@@ -401,6 +453,7 @@ function ImageUploader() {
             <img
               src={liveViewImage}
               alt="Live View"
+              style={{ transform: `rotate(${rotation}deg)` }} // Live preview of rotation
               className="live-view-image"
             />
           ) : (
@@ -421,34 +474,29 @@ function ImageUploader() {
               <option value="vertical">Vertical</option>
             </select>
           </div>
+          <label>Rotate: </label>
+          <input
+            type="range"
+            min="0"
+            max="360"
+            value={rotation}
+            onChange={(e) => handleRotationChange(e.target.value)}
+          />
+          <span>{rotation}°</span>
           <div>
             <label htmlFor="cropToggle">Crop:</label>
             <input
               type="checkbox"
               id="cropToggle"
               checked={crop}
-              onChange={() => setCrop(!crop)}
+              onChange={() => {
+                setCrop(!crop);
+                if (!crop) {
+                  setShowCropModal(true);
+                }
+              }}
             />
           </div>
-          {crop && (
-            <div>
-              <label htmlFor="cropWidth">Width: </label>
-              <input
-                type="number"
-                id="cropWidth"
-                value={cropWidth}
-                onChange={(e) => setCropWidth(e.target.value)}
-              />
-              <br></br>
-              <label htmlFor="cropHeight">Height:</label>
-              <input
-                type="number"
-                id="cropHeight"
-                value={cropHeight}
-                onChange={(e) => setCropHeight(e.target.value)}
-              />
-            </div>
-          )}
         </div>
       </div>
 
@@ -481,6 +529,37 @@ function ImageUploader() {
           )}
         </div>
       </div>
+
+      {/* Crop Modal */}
+      {showCropModal && (
+        <div className="modal-overlay" onClick={() => setShowCropModal(false)}>
+          <div className="crop-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Crop Image</h3>
+            {liveViewImage && (
+              <Cropper
+                src={liveViewImage}
+                style={{ height: 400, width: "100%" }}
+                aspectRatio={16 / 9}
+                guides={false}
+                ref={cropperRef}
+              />
+            )}
+            <button onClick={handleCrop}>Crop</button>
+            <button onClick={() => setShowCropModal(false)}>Close</button>
+            {croppedImage && (
+              <div>
+                <h3>Cropped Image:</h3>
+                <img src={croppedImage} alt="Cropped" />
+                <a href={croppedImage} download="cropped-image.png">
+                  <button className="download-button">
+                    Download Cropped Image
+                  </button>
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
