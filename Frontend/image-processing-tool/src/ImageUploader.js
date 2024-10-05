@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import Slider from "rc-slider";
 import "rc-slider/assets/index.css";
-import Cropper from "react-cropper";
 import "cropperjs/dist/cropper.css";
+import ColorAdjustments from "./ColorAdjustments";
+import ImageActions from "./ImageActions";
+import ImageUploaderHandler from "./ImageUploadHandler"; // Import the new component
+import Segmentation from "./segmentation/segmentation";
 
 function ImageUploader() {
   const [image, setImage] = useState(null);
@@ -12,6 +14,7 @@ function ImageUploader() {
   const [message, setMessage] = useState("");
   const [brightness, setBrightness] = useState(1);
   const [colorMode, setColorMode] = useState("color");
+  const [AutocolorBalance, setAutoColorBalance] = useState("false");
   const [flip, setFlip] = useState("");
   const [hue, setHue] = useState(0);
   const [saturation, setSaturation] = useState(1);
@@ -19,24 +22,17 @@ function ImageUploader() {
   const [crop, setCrop] = useState(false);
   const [cropWidth, setCropWidth] = useState(0);
   const [cropHeight, setCropHeight] = useState(0);
-  const [strength, setStrength] = useState(1); // State for strength control
   const [tonalRange, setTonalRange] = useState(1);
   const [gamma, setGamma] = useState(1);
   const [red, setRed] = useState(1); // State for Red channel
   const [green, setGreen] = useState(1); // State for Green channel
   const [blue, setBlue] = useState(1); // State for Blue channel
-  const [showRgbModal, setShowRgbModal] = useState(false);
-  const [showCropModal, setShowCropModal] = useState(false);
-  const [cropper, setCropper] = useState(null);
   const cropperRef = useRef(null);
-  const [croppedImage, setCroppedImage] = useState(null);
   const [rotation, setRotation] = useState(0);
-
   const resetBrightness = () => setBrightness(1);
   const resetHue = () => setHue(0);
   const resetSaturation = () => setSaturation(1);
   const resetLightness = () => setLightness(1);
-
   const resetGamma = () => setGamma(1);
   const resetRed = () => setRed(1);
   const resetGreen = () => setGreen(1);
@@ -45,9 +41,11 @@ function ImageUploader() {
     setMinTone(0);
     setMaxTone(255);
   };
-
   const [minTone, setMinTone] = useState(0);
   const [maxTone, setMaxTone] = useState(255);
+  const [segmentation, setSegmentation] = useState(false);
+  const [emboss, setEmboss] = useState(false);
+  const [edgeDetection, setEdgeDetection] = useState(false);
 
   useEffect(() => {
     if (originalImage) {
@@ -71,6 +69,10 @@ function ImageUploader() {
     blue,
     minTone,
     maxTone,
+    AutocolorBalance,
+    segmentation,
+    emboss,
+    edgeDetection,
   ]);
 
   const handleFileChange = (e) => {
@@ -84,11 +86,13 @@ function ImageUploader() {
     };
     reader.readAsDataURL(file);
   };
-  const handleRotationChange = (value) => {
-    setRotation(value);
-    // Apply rotation in live preview (Optional: Implement a quick rotation preview function)
+  const applyColorBalance = (data, redBalance, greenBalance, blueBalance) => {
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = Math.min(255, data[i] * redBalance); // Red
+      data[i + 1] = Math.min(255, data[i + 1] * greenBalance); // Green
+      data[i + 2] = Math.min(255, data[i + 2] * blueBalance); // Blue
+    }
   };
-
   const updateLiveView = () => {
     if (!originalImage) return;
 
@@ -100,36 +104,41 @@ function ImageUploader() {
       canvas.width = image.width;
       canvas.height = image.height;
 
-      // Combine applied filters based on their current values
       ctx.filter = `
         brightness(${brightness})
         hue-rotate(${hue}deg)
         saturate(${saturation})
-        brightness(${lightness})
         contrast(${tonalRange})
+        brightness(${lightness})
       `.trim();
-
       ctx.drawImage(image, 0, 0);
 
-      // Apply gamma correction
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
 
-      // Apply RGB adjustments
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] *= red; // Adjust Red channel
-        data[i + 1] *= green; // Adjust Green channel
-        data[i + 2] *= blue; // Adjust Blue channel
+      if (AutocolorBalance) {
+        applyColorBalance(data, red, green, blue);
       }
 
-      // Apply tonal range adjustments
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = Math.min(255, data[i] * red);
+        data[i + 1] = Math.min(255, data[i + 1] * green);
+        data[i + 2] = Math.min(255, data[i + 2] * blue);
+      }
+
+      const adjustTone = (value) => {
+        return Math.min(
+          255,
+          Math.max(0, ((value - minTone) / (maxTone - minTone)) * 255)
+        );
+      };
+
       for (let i = 0; i < data.length; i += 4) {
         data[i] = adjustTone(data[i]);
         data[i + 1] = adjustTone(data[i + 1]);
         data[i + 2] = adjustTone(data[i + 2]);
       }
 
-      // Apply gamma correction
       const gammaCorrection = 1 / gamma;
       for (let i = 0; i < data.length; i += 4) {
         data[i] = 255 * Math.pow(data[i] / 255, gammaCorrection);
@@ -139,7 +148,6 @@ function ImageUploader() {
 
       ctx.putImageData(imageData, 0, 0);
 
-      // Handle cropping after all filters are applied
       if (crop && cropWidth > 0 && cropHeight > 0) {
         const cropX = (canvas.width - cropWidth) / 2;
         const cropY = (canvas.height - cropHeight) / 2;
@@ -154,7 +162,36 @@ function ImageUploader() {
         ctx.putImageData(croppedImage, 0, 0);
       }
 
-      // Handle flipping
+      if (emboss) {
+        const embossImage = applyEmboss(data, canvas.width, canvas.height);
+        ctx.putImageData(embossImage, 0, 0);
+      }
+
+      if (edgeDetection) {
+        const edgesImage = applyEdgeDetection(
+          data,
+          canvas.width,
+          canvas.height
+        );
+        ctx.putImageData(edgesImage, 0, 0);
+      }
+
+      // Apply segmentation if enabled
+      if (segmentation) {
+        applySegmentation(data, canvas.width, canvas.height);
+        ctx.putImageData(imageData, 0, 0); // Update the canvas with segmentation changes
+      }
+
+      if (colorMode === "grayscale") {
+        for (let i = 0; i < data.length; i += 4) {
+          const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+          data[i] = avg; // Red
+          data[i + 1] = avg; // Green
+          data[i + 2] = avg; // Blue
+        }
+        ctx.putImageData(imageData, 0, 0);
+      }
+
       if (flip === "horizontal") {
         const flippedCanvas = document.createElement("canvas");
         const flippedCtx = flippedCanvas.getContext("2d");
@@ -179,10 +216,104 @@ function ImageUploader() {
         ctx.drawImage(flippedCanvas, 0, 0);
       }
 
-      setLiveViewImage(canvas.toDataURL());
+      setLiveViewImage(canvas.toDataURL("image/png", 1.0));
     };
 
     image.src = originalImage;
+  };
+
+  const applyEdgeDetection = (data, width, height) => {
+    const kernel = [
+      [-1, -1, -1],
+      [-1, 8, -1],
+      [-1, -1, -1],
+    ];
+    return applyKernel(data, width, height, kernel);
+  };
+
+  const applyEmboss = (data, width, height) => {
+    const kernel = [
+      [0, -1, -1],
+      [1, 0, -1],
+      [1, 1, 0],
+    ];
+    return applyKernel(data, width, height, kernel);
+  };
+
+  const applyKernel = (data, width, height, kernel) => {
+    const result = new Uint8ClampedArray(data.length);
+    const kernelSize = kernel.length;
+    const kernelHalf = Math.floor(kernelSize / 2);
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let r = 0,
+          g = 0,
+          b = 0;
+
+        for (let ky = 0; ky < kernelSize; ky++) {
+          for (let kx = 0; kx < kernelSize; kx++) {
+            const px = x + kx - kernelHalf;
+            const py = y + ky - kernelHalf;
+
+            if (px >= 0 && px < width && py >= 0 && py < height) {
+              const i = (py * width + px) * 4;
+              const weight = kernel[ky][kx];
+              r += data[i] * weight;
+              g += data[i + 1] * weight;
+              b += data[i + 2] * weight;
+            }
+          }
+        }
+
+        const i = (y * width + x) * 4;
+        result[i] = Math.min(255, Math.max(0, r));
+        result[i + 1] = Math.min(255, Math.max(0, g));
+        result[i + 2] = Math.min(255, Math.max(0, b));
+        result[i + 3] = data[i + 3];
+      }
+    }
+
+    const imageData = new ImageData(result, width, height);
+    return imageData;
+  };
+
+  const applySegmentation = (data, width, height) => {
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      data[i] = gray;
+      data[i + 1] = gray;
+      data[i + 2] = gray;
+    }
+
+    // Binary thresholding for segmentation
+    const threshold = 128; // Adjust this value based on your segmentation needs
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = data[i]; // All RGB channels are the same after grayscale conversion
+      const value = gray < threshold ? 0 : 255;
+      data[i] = value; // Red
+      data[i + 1] = value; // Green
+      data[i + 2] = value; // Blue
+    }
+
+    // Example: Apply contours (basic approach using thresholding as contours)
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const index = (y * width + x) * 4;
+        // Basic edge detection to create contour effect
+        if (
+          data[index] === 255 &&
+          (data[index - 4] === 0 ||
+            data[index + 4] === 0 ||
+            data[index - width * 4] === 0 ||
+            data[index + width * 4] === 0)
+        ) {
+          data[index] = 255;
+          data[index + 1] = 0;
+          data[index + 2] = 0;
+        }
+      }
+    }
   };
 
   const adjustTone = (value) => {
@@ -190,79 +321,6 @@ function ImageUploader() {
       Math.max(((value - minTone) / (maxTone - minTone)) * 255, 0),
       255
     );
-  };
-
-  const handleUpload = async () => {
-    let finalImage = image;
-
-    // If there's a crop operation, handle it
-    if (cropperRef.current && cropperRef.current.cropper) {
-      const croppedCanvas = cropperRef.current.cropper.getCroppedCanvas();
-      finalImage = await new Promise((resolve) =>
-        croppedCanvas.toBlob(resolve)
-      );
-    }
-
-    const formData = new FormData();
-    formData.append("image", finalImage);
-    formData.append(
-      "brightness",
-      brightness !== 1 ? brightness * strength : brightness
-    );
-    formData.append("min_tone", minTone);
-    formData.append("max_tone", maxTone);
-    formData.append("color_mode", colorMode);
-    formData.append("flip", flip);
-    formData.append("hue", hue !== 0 ? hue * strength : hue);
-    formData.append(
-      "saturation",
-      saturation !== 1 ? saturation * strength : saturation
-    );
-    formData.append(
-      "lightness",
-      lightness !== 1 ? lightness * strength : lightness
-    );
-    formData.append("tonal_range", parseFloat(tonalRange));
-    formData.append("gamma", parseFloat(gamma));
-    formData.append("red", parseFloat(red));
-    formData.append("green", parseFloat(green));
-    formData.append("blue", parseFloat(blue));
-    formData.append("crop", crop);
-    formData.append("crop_width", parseInt(cropWidth));
-    formData.append("crop_height", parseInt(cropHeight));
-    formData.append("rotation", rotation);
-    console.log("Sending data:", {
-      gamma: parseFloat(gamma),
-      tonal_range: parseFloat(tonalRange),
-    });
-
-    try {
-      const response = await fetch("http://localhost:5000/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-      setMessage(data.message);
-      setProcessedImage(`data:image/png;base64,${data.image}`);
-    } catch (error) {
-      console.error("Error uploading image:", error);
-    }
-  };
-
-  const handleCrop = () => {
-    if (cropperRef.current && cropperRef.current.cropper) {
-      const croppedCanvas = cropperRef.current.cropper.getCroppedCanvas();
-      const croppedImageData = croppedCanvas.toDataURL();
-
-      // Update the live view with the cropped image
-      setLiveViewImage(croppedImageData);
-
-      // Optionally, update the cropped image state if needed
-      setCroppedImage(croppedImageData);
-
-      setShowCropModal(false);
-    }
   };
 
   return (
@@ -281,171 +339,39 @@ function ImageUploader() {
       </div>
 
       <div className="controls-preview-container">
-        <div className="left-controls">
-          <div>
-            <label htmlFor="strength">Strength:</label>
-            <select
-              id="strength"
-              value={strength}
-              onChange={(e) => setStrength(parseFloat(e.target.value))}
-            >
-              <option value={1}>Low</option>
-              <option value={1.5}>Medium</option>
-              <option value={2}>High</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="brightness">Brightness: {brightness}</label>
-            <input
-              type="range"
-              id="brightness"
-              min="0.5"
-              max="3"
-              step="0.1"
-              value={brightness}
-              onChange={(e) => setBrightness(e.target.value)}
-            />
-            <button className="resetbtn" onClick={resetBrightness}></button>
-          </div>
-          <div>
-            <label htmlFor="hue">Hue: {hue}</label>
-            <input
-              type="range"
-              id="hue"
-              min="-180"
-              max="180"
-              step="1"
-              value={hue}
-              onChange={(e) => setHue(e.target.value)}
-            />
-            <button className="resetbtn" onClick={resetHue}></button>
-          </div>
-          <div>
-            <label htmlFor="saturation">Saturation: {saturation}</label>
-            <input
-              type="range"
-              id="saturation"
-              min="0"
-              max="2"
-              step="0.1"
-              value={saturation}
-              onChange={(e) => setSaturation(e.target.value)}
-            />
-            <button className="resetbtn" onClick={resetSaturation}></button>
-          </div>
-          <div>
-            <label htmlFor="lightness">Lightness: {lightness}</label>
-            <input
-              type="range"
-              id="lightness"
-              min="0.5"
-              max="2"
-              step="0.1"
-              value={lightness}
-              onChange={(e) => setLightness(e.target.value)}
-            />
-            <button className="resetbtn" onClick={resetLightness}></button>
-          </div>
-          <div>
-            <label>Min Tone - Max Tone</label>
-            <Slider
-              range
-              min={0}
-              max={255}
-              step={1}
-              value={[minTone, maxTone]}
-              onChange={(value) => {
-                setMinTone(value[0]);
-                setMaxTone(value[1]);
-              }}
-              allowCross={false}
-            />
-            <div>
-              <span>Min Tone: {minTone}</span>
-              <span>Max Tone: {maxTone}</span>
-            </div>
-            <button className="resetbtn" onClick={resetTone}></button>
-          </div>
-
-          <div>
-            <label htmlFor="gamma">Gamma: {gamma}</label>
-            <input
-              type="range"
-              id="gamma"
-              min="0.5"
-              max="3"
-              step="0.1"
-              value={gamma}
-              onChange={(e) => setGamma(e.target.value)}
-            />
-            <button className="resetbtn" onClick={resetGamma}></button>
-          </div>
-          <button onClick={() => setShowRgbModal(true)}>RGB Change</button>
-          {/* Modal for RGB Sliders */}
-          {showRgbModal && (
-            <>
-              <div
-                className="modal-overlay"
-                onClick={() => setShowRgbModal(false)}
-              />
-              <div className="rgb-modal">
-                <h3>Adjust RGB Levels</h3>
-                <div>
-                  <label htmlFor="red">Red: {red}</label>
-                  <input
-                    type="range"
-                    id="red"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value={red}
-                    onChange={(e) => setRed(e.target.value)}
-                  />
-                  <button className="resetbtn" onClick={resetRed}></button>
-                </div>
-                <div>
-                  <label htmlFor="green">Green: {green}</label>
-                  <input
-                    type="range"
-                    id="green"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value={green}
-                    onChange={(e) => setGreen(e.target.value)}
-                  />
-                  <button className="resetbtn" onClick={resetGreen}></button>
-                </div>
-                <div>
-                  <label htmlFor="blue">Blue: {blue}</label>
-                  <input
-                    type="range"
-                    id="blue"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value={blue}
-                    onChange={(e) => setBlue(e.target.value)}
-                  />
-                  <button className="resetbtn" onClick={resetBlue}></button>
-                </div>
-                <button onClick={() => setShowRgbModal(false)}>Close</button>
-              </div>
-            </>
-          )}
-          <div>
-            <label htmlFor="colorMode">Color Mode:</label>
-            <select
-              id="colorMode"
-              value={colorMode}
-              onChange={(e) => setColorMode(e.target.value)}
-            >
-              <option value="color">Color</option>
-              <option value="grayscale">Grayscale</option>
-              <option value="bw">Black & White</option>
-            </select>
-          </div>
-        </div>
+        <ColorAdjustments
+          brightness={brightness}
+          setBrightness={setBrightness}
+          hue={hue}
+          setHue={setHue}
+          saturation={saturation}
+          setSaturation={setSaturation}
+          lightness={lightness}
+          setLightness={setLightness}
+          gamma={gamma}
+          setGamma={setGamma}
+          setColorMode={setColorMode}
+          red={red}
+          setRed={setRed}
+          green={green}
+          setGreen={setGreen}
+          blue={blue}
+          setBlue={setBlue}
+          resetBrightness={resetBrightness}
+          resetHue={resetHue}
+          resetSaturation={resetSaturation}
+          resetLightness={resetLightness}
+          resetGamma={resetGamma}
+          resetRed={resetRed}
+          resetGreen={resetGreen}
+          resetBlue={resetBlue}
+          resetTone={resetTone}
+          minTone={minTone}
+          maxTone={maxTone}
+          setMinTone={setMinTone}
+          setMaxTone={setMaxTone}
+          setAutoColorBalance={setAutoColorBalance}
+        />
 
         <div className="live-view-container">
           <h2>Live View:</h2>
@@ -453,7 +379,7 @@ function ImageUploader() {
             <img
               src={liveViewImage}
               alt="Live View"
-              style={{ transform: `rotate(${rotation}deg)` }} // Live preview of rotation
+              style={{ transform: `rotate(${rotation}deg)` }}
               className="live-view-image"
             />
           ) : (
@@ -462,47 +388,59 @@ function ImageUploader() {
         </div>
 
         <div className="right-controls">
-          <div>
-            <label htmlFor="flip">Flip:</label>
-            <select
-              id="flip"
-              value={flip}
-              onChange={(e) => setFlip(e.target.value)}
-            >
-              <option value="">None</option>
-              <option value="horizontal">Horizontal</option>
-              <option value="vertical">Vertical</option>
-            </select>
-          </div>
-          <label>Rotate: </label>
-          <input
-            type="range"
-            min="0"
-            max="360"
-            value={rotation}
-            onChange={(e) => handleRotationChange(e.target.value)}
+          <ImageActions
+            liveViewImage={liveViewImage}
+            setLiveViewImage={setLiveViewImage}
+            rotation={rotation}
+            setRotation={setRotation}
+            crop={crop}
+            setCrop={setCrop}
+            flip={flip}
+            setFlip={setFlip}
+            cropWidth={cropWidth}
+            setCropWidth={setCropWidth}
+            cropHeight={cropHeight}
+            setCropHeight={setCropHeight}
           />
-          <span>{rotation}°</span>
-          <div>
-            <label htmlFor="cropToggle">Crop:</label>
-            <input
-              type="checkbox"
-              id="cropToggle"
-              checked={crop}
-              onChange={() => {
-                setCrop(!crop);
-                if (!crop) {
-                  setShowCropModal(true);
-                }
-              }}
-            />
-          </div>
+          <Segmentation
+            setSegmentation={setSegmentation}
+            segmentation={segmentation}
+            edgeDetection={edgeDetection}
+            setEdgeDetection={setEdgeDetection}
+            setEmboss={setEmboss}
+            emboss={emboss}
+          />
         </div>
       </div>
 
-      <button className="buttonUpload" onClick={handleUpload}>
-        Process Image
-      </button>
+      <ImageUploaderHandler
+        image={image}
+        brightness={brightness}
+        hue={hue}
+        saturation={saturation}
+        lightness={lightness}
+        tonalRange={tonalRange}
+        flip={flip}
+        gamma={gamma}
+        colorMode={colorMode}
+        red={red}
+        green={green}
+        blue={blue}
+        minTone={minTone}
+        maxTone={maxTone}
+        crop={crop}
+        cropWidth={cropWidth}
+        cropHeight={cropHeight}
+        rotation={rotation}
+        cropperRef={cropperRef}
+        setMessage={setMessage}
+        setProcessedImage={setProcessedImage}
+        AutocolorBalance={AutocolorBalance}
+        Segmentation={segmentation}
+        emboss={emboss}
+        edgeDetection={edgeDetection}
+      />
+
       {message && <p>{message}</p>}
 
       <div className="image-container">
@@ -529,37 +467,6 @@ function ImageUploader() {
           )}
         </div>
       </div>
-
-      {/* Crop Modal */}
-      {showCropModal && (
-        <div className="modal-overlay" onClick={() => setShowCropModal(false)}>
-          <div className="crop-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Crop Image</h3>
-            {liveViewImage && (
-              <Cropper
-                src={liveViewImage}
-                style={{ height: 400, width: "100%" }}
-                aspectRatio={16 / 9}
-                guides={false}
-                ref={cropperRef}
-              />
-            )}
-            <button onClick={handleCrop}>Crop</button>
-            <button onClick={() => setShowCropModal(false)}>Close</button>
-            {croppedImage && (
-              <div>
-                <h3>Cropped Image:</h3>
-                <img src={croppedImage} alt="Cropped" />
-                <a href={croppedImage} download="cropped-image.png">
-                  <button className="download-button">
-                    Download Cropped Image
-                  </button>
-                </a>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
