@@ -9,12 +9,177 @@ import cv2
 from imageText import imageText
 from Segmentation import Segmentation
 from io import BytesIO
-
+from keras.models import load_model
+import cv2
+import numpy as np
+import base64
+import tensorflow as tf
 
 segmentation = Segmentation()
 
+
+# Define image size expected by the enhancement model
+SIZE = 256
+
+def preprocess_image(image):
+    """Preprocess the input image for the model."""
+    img = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+    img = cv2.resize(img, (SIZE, SIZE))
+    img = img.astype('float32') / 255.0
+    img = np.expand_dims(img, axis=0)  # Add batch dimension
+    return img
+
+def postprocess_image(output):
+    """Postprocess the model's output to convert it back to an image format."""
+    output = np.clip(output, 0, 1)
+    output = (output * 255).astype(np.uint8)
+    return output[0]  # Remove batch dimension
+
+
 app = Flask(__name__)
 CORS(app)  
+# ML Segmentation
+
+enhance_model = tf.keras.models.load_model('Enhance1.keras')
+# Load the trained emotion recognition model
+model = load_model('emotion_model.keras')
+
+# Define emotion labels
+emotion_labels = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
+
+
+
+def predict_emotion(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+
+    if len(faces) == 0:
+        raise Exception("No face detected.")
+
+    for (x, y, w, h) in faces:
+        roi_gray = gray[y:y+h, x:x+w]
+        roi_gray = cv2.resize(roi_gray, (48, 48))
+        roi_gray = roi_gray.astype('float32') / 255.0
+        roi_gray = np.expand_dims(roi_gray, axis=0)
+        roi_gray = np.expand_dims(roi_gray, axis=-1)
+
+        predictions = model.predict(roi_gray)
+        emotion = emotion_labels[np.argmax(predictions[0])]
+
+        cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+        cv2.putText(img, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+
+    return img, emotion
+
+
+
+# Styling 
+
+
+# Load the style transfer model (previously memorized code)
+style_transfer_model = tf.saved_model.load('./saved_model')
+
+
+
+# Function for style transfer (previously memorized)
+def load_and_process_image(image, max_dim=512):
+    img = tf.image.decode_image(image, channels=3)  # Decode to RGB
+    img = tf.image.convert_image_dtype(img, tf.float32)  # Convert image to float32
+    shape = tf.shape(img)[:-1]  # Ignore channels
+    shape = tf.cast(shape, tf.float32)  # Ensure shape is in float32 for calculation
+    scale = max_dim / tf.reduce_max(shape)
+    new_shape = tf.cast(shape * scale, tf.int32)  # Cast to int32 for resizing
+    img = tf.image.resize(img, new_shape)  # Resize image
+    img = img[tf.newaxis, :]  # Add batch dimension
+    return img
+
+
+# Style Transfer API (previously memorized code)
+@app.route('/style-transfer', methods=['POST'])
+def style_transfer():
+    if 'content_image' not in request.files or 'style_image' not in request.files:
+        return jsonify({"error": "Please provide both content and style images"}), 400
+
+    # Read content and style images from the request
+    content_image = request.files['content_image'].read()
+    style_image = request.files['style_image'].read()
+
+    # Load and preprocess images
+    content_image = load_and_process_image(content_image)
+    style_image = load_and_process_image(style_image)
+
+    # Perform style transfer
+    outputs = style_transfer_model(content_image, style_image)
+    stylized_image = outputs[0]
+
+    # Convert the stylized image back to PIL format to send it back as a response
+    stylized_image = tf.image.convert_image_dtype(stylized_image, dtype=tf.uint8)
+    stylized_image = np.squeeze(stylized_image.numpy())
+    pil_image = Image.fromarray(stylized_image)
+
+    # Convert to a byte array
+    img_io = BytesIO()
+    pil_image.save(img_io, 'JPEG')
+    img_io.seek(0)
+
+    return send_file(img_io, mimetype='image/jpeg')
+
+
+
+@app.route('/enhance', methods=['POST'])
+def enhance_image():
+    if 'image' not in request.files:
+        return jsonify({"error": "No image uploaded"}), 400
+
+    # Read image from the request
+    image_file = request.files['image']
+    image = Image.open(image_file.stream)
+
+    # Preprocess the image and enhance it
+    processed_image = preprocess_image(image)
+    enhanced_image = enhance_model.predict(processed_image)
+    enhanced_image = postprocess_image(enhanced_image)
+
+    # Convert enhanced image to PIL format and send it back
+    enhanced_image_pil = Image.fromarray(enhanced_image)
+    img_io = io.BytesIO()
+    enhanced_image_pil.save(img_io, 'PNG')
+    img_io.seek(0)
+
+    return send_file(img_io, mimetype='image/png')
+
+
+
+
+@app.route('/predict', methods=['POST'])
+def predict_emotion_route():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    file = request.files['file']
+
+    # Read the image file
+    img_array = np.asarray(bytearray(file.read()), dtype=np.uint8)
+    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+    try:
+        # Process the image to predict emotion
+        processed_img, predicted_emotion = predict_emotion(img)
+
+        # Convert processed image to base64
+        _, buffer = cv2.imencode('.jpg', processed_img)
+        img_base64 = base64.b64encode(buffer).decode('utf-8')
+
+        return jsonify({'image': f"data:image/jpeg;base64,{img_base64}", 'emotion': predicted_emotion})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+
 
 def process_image(image, params):
     """Process the image based on provided parameters."""
@@ -288,6 +453,5 @@ def extract_text():
 
 if __name__ == "__main__":
     app.run(debug=True, threaded=True)  # Enable threading for concurrent requests
-
 
 
